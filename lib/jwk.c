@@ -435,6 +435,83 @@ jose_jwk_exc(jose_cfg_t *cfg, const json_t *prv, const json_t *pub)
     return NULL;
 }
 
+json_t *
+jose_jwk_kem_enc(jose_cfg_t *cfg, const json_t *pub)
+{
+    const char *alg = NULL;
+
+    if (json_unpack((json_t *) pub, "{s:s}", "alg", &alg) < 0) {
+        jose_cfg_err(cfg, JOSE_CFG_ERR_JWK_INVALID,
+                     "Public JWK is missing 'alg'");
+        return NULL;
+    }
+
+    for (const jose_hook_alg_t *a = jose_hook_alg_list(); a; a = a->next) {
+        if (a->kind != JOSE_HOOK_ALG_KIND_KEM)
+            continue;
+
+        if (strcmp(alg, a->name) != 0)
+            continue;
+
+        if (!jose_jwk_prm(cfg, pub, false, a->kem.prm)) {
+            jose_cfg_err(cfg, JOSE_CFG_ERR_JWK_DENIED,
+                         "Public JWK cannot be used for KEM");
+            return NULL;
+        }
+
+        return a->kem.enc(a, cfg, pub);
+    }
+
+    jose_cfg_err(cfg, JOSE_CFG_ERR_ALG_NOTSUP,
+                 "KEM algorithm %s is unsupported", alg);
+    return NULL;
+}
+
+json_t *
+jose_jwk_kem_dec(jose_cfg_t *cfg, const json_t *prv, const json_t *ct)
+{
+    const char *alg = NULL;
+    const char *kty = NULL;
+
+    if (json_unpack((json_t *) prv, "{s:s,s?s}", "alg", &alg, "kty", &kty) < 0) {
+        jose_cfg_err(cfg, JOSE_CFG_ERR_JWK_INVALID,
+                     "Private JWK is missing 'alg'");
+        return NULL;
+    }
+
+    if (!kty || strcmp(kty, "AKP") != 0) {
+        jose_cfg_err(cfg, JOSE_CFG_ERR_JWK_INVALID,
+                     "KEM requires kty 'AKP'");
+        return NULL;
+    }
+
+    if (!json_object_get(prv, "priv")) {
+        jose_cfg_err(cfg, JOSE_CFG_ERR_JWK_DENIED,
+                     "JWK is missing private key material ('priv')");
+        return NULL;
+    }
+
+    for (const jose_hook_alg_t *a = jose_hook_alg_list(); a; a = a->next) {
+        if (a->kind != JOSE_HOOK_ALG_KIND_KEM)
+            continue;
+
+        if (strcmp(alg, a->name) != 0)
+            continue;
+
+        if (!jose_jwk_prm(cfg, prv, false, a->kem.prm)) {
+            jose_cfg_err(cfg, JOSE_CFG_ERR_JWK_DENIED,
+                         "Private JWK cannot be used for KEM");
+            return NULL;
+        }
+
+        return a->kem.dec(a, cfg, prv, ct);
+    }
+
+    jose_cfg_err(cfg, JOSE_CFG_ERR_ALG_NOTSUP,
+                 "KEM algorithm %s is unsupported", alg);
+    return NULL;
+}
+
 static void __attribute__((constructor))
 constructor(void)
 {
