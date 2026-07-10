@@ -71,3 +71,24 @@ jose jws ver -i $prfx.8.jwsg -k $prfx.8.jwkset
 jose jws ver -i $prfx.8.jwsg -k $prfx.8.1.jwk
 jose jws ver -i $prfx.8.jwsg -k $prfx.8.2.jwk
 jose jws ver -i $prfx.8.jwsg -k $prfx.8.3.jwk
+
+# Verification must fail when the JWK's alg disagrees with the JWS's
+# alg, regardless of their relative order. Here the JWS says HS512
+# and the (otherwise valid) key says HS256: without the alg check,
+# the signature itself would still verify.
+t="`mktemp -d`"
+jose jwk gen -i '{"alg":"HS512"}' -o $t/hs512.jwk
+echo test | jose jws sig -I- -k $t/hs512.jwk -o $t/sig.jws
+jose fmt -j $t/hs512.jwk -q HS256 -s alg -U -o $t/hs256.jwk
+# NOTE: a negated pipeline is exempt from sh -e, so expected failures
+# are enforced with an explicit exit rather than a leading "!".
+jose jws ver -i $t/sig.jws -k $t/hs256.jwk && exit 1
+
+# A JWK whose private exponent cannot be decoded must be rejected
+# outright, not silently imported as a public key, which would make
+# verification succeed with corrupted private material present.
+jose jwk gen -i '{"alg":"RS256"}' -o $t/rsa.jwk
+echo test | jose jws sig -I- -k $t/rsa.jwk -o $t/rsig.jws
+jose fmt -j $t/rsa.jwk -q "not-valid-base64!" -s d -U -o $t/bad.jwk
+jose jws ver -i $t/rsig.jws -k $t/bad.jwk && exit 1
+rm -rf $t
