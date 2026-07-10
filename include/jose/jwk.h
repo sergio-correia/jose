@@ -201,6 +201,10 @@ jose_jwk_exc(jose_cfg_t *cfg, const json_t *lcl, const json_t *rem);
  * Returns a JSON object containing the shared secret as an oct JWK
  * ("ss") and the ciphertext as a base64url string ("ct").
  *
+ * The returned object contains secret material. Callers handling
+ * sensitive key material should cleanse the "k" value of the "ss"
+ * object before releasing it.
+ *
  * \param cfg  The configuration context (optional).
  * \param pub  The public JWK to encapsulate against.
  * \return     On success, a JSON object. Otherwise, NULL.
