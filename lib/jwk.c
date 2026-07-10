@@ -103,6 +103,10 @@ jose_jwk_gen(jose_cfg_t *cfg, json_t *jwk)
             if (json_array_append_new(ops, json_string("deriveKey")) < 0)
                 return false;
             break;
+        case JOSE_HOOK_ALG_KIND_KEM:
+            if (json_array_append_new(ops, json_string("deriveKey")) < 0)
+                return false;
+            break;
         default:
             break;
         }
@@ -439,10 +443,17 @@ json_t *
 jose_jwk_kem_enc(jose_cfg_t *cfg, const json_t *pub)
 {
     const char *alg = NULL;
+    const char *kty = NULL;
 
-    if (json_unpack((json_t *) pub, "{s:s}", "alg", &alg) < 0) {
+    if (json_unpack((json_t *) pub, "{s:s,s?s}", "alg", &alg, "kty", &kty) < 0) {
         jose_cfg_err(cfg, JOSE_CFG_ERR_JWK_INVALID,
                      "Public JWK is missing 'alg'");
+        return NULL;
+    }
+
+    if (!kty || strcmp(kty, "AKP") != 0) {
+        jose_cfg_err(cfg, JOSE_CFG_ERR_JWK_INVALID,
+                     "KEM requires kty 'AKP'");
         return NULL;
     }
 
@@ -526,6 +537,10 @@ constructor(void)
     static const char *ec_pub[] = { "x", "y", NULL };
     static const char *ec_prv[] = { "d", NULL };
 
+    static const char *akp_req[] = { "alg", "pub", NULL };
+    static const char *akp_pub[] = { "pub", NULL };
+    static const char *akp_prv[] = { "priv", NULL };
+
     static jose_hook_jwk_t hooks[] = {
         { .kind = JOSE_HOOK_JWK_KIND_TYPE,
           .type = { .kty = "oct", .req = oct_req, .prv = oct_prv } },
@@ -533,6 +548,8 @@ constructor(void)
           .type = { .kty = "RSA", .req = rsa_req, .pub = rsa_pub, .prv = rsa_prv } },
         { .kind = JOSE_HOOK_JWK_KIND_TYPE,
           .type = { .kty = "EC", .req = ec_req, .pub = ec_pub, .prv = ec_prv } },
+        { .kind = JOSE_HOOK_JWK_KIND_TYPE,
+          .type = { .kty = "AKP", .req = akp_req, .pub = akp_pub, .prv = akp_prv } },
         { .kind = JOSE_HOOK_JWK_KIND_OPER,
           .oper = { .pub = "verify", .prv = "sign", .use = "sig" } },
         { .kind = JOSE_HOOK_JWK_KIND_OPER,
