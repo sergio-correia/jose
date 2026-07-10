@@ -20,6 +20,10 @@ jose - Toolkit for performing JSON Object Signing and Encryption
 
 *jose jwe fmt* -i JWE [-I CT] [-o JWE] [-O CT] [-c]
 
+*jose jwk encap* -i JWK [-o JSON]
+
+*jose jwk decap* -i JWK -c B64U [-o JWK]
+
 *jose jwk exc* [-i JWK] -l JWK -r JWK [-o JWK]
 
 *jose jwk gen* -i JWK [-o JWK]
@@ -70,6 +74,8 @@ link:jose-b64-enc.1.adoc[*jose-b64-enc*(1)],
 link:jose-jwe-dec.1.adoc[*jose-jwe-dec*(1)],
 link:jose-jwe-enc.1.adoc[*jose-jwe-enc*(1)],
 link:jose-jwe-fmt.1.adoc[*jose-jwe-fmt*(1)],
+link:jose-jwk-decap.1.adoc[*jose-jwk-decap*(1)],
+link:jose-jwk-encap.1.adoc[*jose-jwk-encap*(1)],
 link:jose-jwk-exc.1.adoc[*jose-jwk-exc*(1)],
 link:jose-jwk-gen.1.adoc[*jose-jwk-gen*(1)],
 link:jose-jwk-pub.1.adoc[*jose-jwk-pub*(1)],
