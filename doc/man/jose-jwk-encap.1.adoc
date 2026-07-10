@@ -1,0 +1,58 @@
+jose-jwk-encap(1)
+=================
+:doctype: manpage
+
+== NAME
+
+jose-jwk-encap - Performs KEM encapsulation using a public key
+
+== SYNOPSIS
+
+*jose jwk encap* -i JWK [-o JWK]
+
+== OVERVIEW
+
+The *jose jwk encap* command performs key encapsulation using the public key
+specified as input and outputs a JSON object containing the ciphertext
+("ct") and the shared secret ("ss").
+
+The input must be a single JWK with the "kty" property set to "AKP" and the
+"alg" property set to one of "ML-KEM-512", "ML-KEM-768" or "ML-KEM-1024".
+Support for these algorithms requires OpenSSL 3.5 or later; use
+*jose alg -k kem* to check whether they are available.
+
+Encapsulation is randomized: each invocation produces a different ciphertext
+and shared secret.
+
+== WARNING: SENSITIVE OUTPUT
+
+The "ss" member of the output contains the shared secret in base64url
+encoding. It is secret material: anyone holding it can derive whatever key
+the parties derive from the encapsulation. Do not write it to files with
+permissive permissions, do not log it, and wipe it from memory when it is no
+longer needed. Note that the shared secret travels inside the same JSON
+object as the public ciphertext, so serializing the whole output discloses
+the secret.
+
+The shared secret is stored in a JSON string, which the JSON library
+releases without zeroizing it. To wipe it before releasing the output
+object, cleanse the buffer behind the string, for example:
+
+    OPENSSL_cleanse((void *) json_string_value(ss), json_string_length(ss));
+
+== OPTIONS
+
+* -i *JSON*|*FILE*|*-* : Parse the public JWK from JSON, a file or standard
+  input
+* -o *FILE*|*-* : Write the encapsulation result to a file or standard
+  output
+
+== EXAMPLES
+
+Encapsulate against a public key stored in a file:
+
+    $ jose jwk encap -i pub.jwk -o enc.json
+
+Encapsulate against a public key provided on standard input:
+
+    $ jose jwk gen -i '{"alg":"ML-KEM-768"}' | jose jwk pub | jose jwk encap

@@ -1,0 +1,55 @@
+jose-jwk-decap(1)
+=================
+:doctype: manpage
+
+== NAME
+
+jose-jwk-decap - Performs KEM decapsulation using a private key
+
+== SYNOPSIS
+
+*jose jwk decap* -i JWK -c CT [-o JWK]
+
+== OVERVIEW
+
+The *jose jwk decap* command performs key decapsulation using the private
+key specified as input and the ciphertext specified with the -c option, and
+outputs the shared secret as a JWK of type "oct".
+
+The input must be a single JWK with the "kty" property set to "AKP" and the
+"alg" property set to one of "ML-KEM-512", "ML-KEM-768" or "ML-KEM-1024".
+The ciphertext must be the base64url-encoded "ct" value produced by
+*jose jwk encap* for the corresponding public key. Support for these
+algorithms requires OpenSSL 3.5 or later; use *jose alg -k kem* to check
+whether they are available.
+
+Per FIPS 203, decapsulation of a ciphertext that was not produced for the
+key does not fail: it returns a pseudorandom shared secret instead. A
+successful command therefore does not prove the ciphertext was genuine.
+
+== WARNING: SENSITIVE OUTPUT
+
+The "k" member of the output contains the shared secret in base64url
+encoding. It is secret material: anyone holding it can derive whatever key
+the parties derive from the encapsulation. Do not write it to files with
+permissive permissions, do not log it, and wipe it from memory when it is no
+longer needed.
+
+The shared secret is stored in a JSON string, which the JSON library
+releases without zeroizing it. To wipe it before releasing the output
+object, cleanse the buffer behind the string, for example:
+
+    OPENSSL_cleanse((void *) json_string_value(ss), json_string_length(ss));
+
+== OPTIONS
+
+* -i *JSON*|*FILE*|*-* : Parse the private JWK from JSON, a file or standard
+  input
+* -c *B64U* : The base64url-encoded ciphertext to decapsulate
+* -o *FILE*|*-* : Write the shared secret JWK to a file or standard output
+
+== EXAMPLES
+
+Decapsulate a ciphertext with a private key stored in a file:
+
+    $ jose jwk decap -i priv.jwk -c "$CT" -o ss.jwk
