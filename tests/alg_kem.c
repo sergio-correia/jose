@@ -179,6 +179,92 @@ test_thumbprint(const jose_hook_alg_t *a)
     assert(json_string_length(thp) > 0);
 }
 
+static void
+test_seed_format(const jose_hook_alg_t *a)
+{
+    json_auto_t *jwk = json_pack("{s:s}", "alg", a->name);
+    assert(jose_jwk_gen(NULL, jwk));
+
+    size_t priv_len = jose_b64_dec(json_object_get(jwk, "priv"), NULL, 0);
+    assert(priv_len == 64);
+}
+
+static void
+test_seed_determinism(const jose_hook_alg_t *a)
+{
+    json_auto_t *jwk = json_pack("{s:s}", "alg", a->name);
+    assert(jose_jwk_gen(NULL, jwk));
+
+    const char *pub1 = json_string_value(json_object_get(jwk, "pub"));
+    const char *priv_b64 = json_string_value(json_object_get(jwk, "priv"));
+    assert(pub1 && priv_b64);
+
+    json_auto_t *jwk2 = json_pack("{s:s,s:s,s:s}",
+                                  "kty", "AKP",
+                                  "alg", a->name,
+                                  "priv", priv_b64);
+    assert(jwk2);
+
+    json_auto_t *pub_jwk = json_deep_copy(jwk);
+    assert(jose_jwk_pub(NULL, pub_jwk));
+
+    json_auto_t *enc = jose_jwk_kem_enc(NULL, pub_jwk);
+    assert(enc);
+
+    json_auto_t *dec = jose_jwk_kem_dec(NULL, jwk2, json_object_get(enc, "ct"));
+    assert(dec);
+
+    const char *ss1 = json_string_value(json_object_get(json_object_get(enc, "ss"), "k"));
+    const char *ss2 = json_string_value(json_object_get(dec, "k"));
+    assert(ss1 && ss2);
+    assert(strcmp(ss1, ss2) == 0);
+}
+
+static void
+test_wrong_priv_len(const jose_hook_alg_t *a)
+{
+    json_auto_t *jwk = json_pack("{s:s}", "alg", a->name);
+    assert(jose_jwk_gen(NULL, jwk));
+
+    json_auto_t *pub_jwk = json_deep_copy(jwk);
+    assert(jose_jwk_pub(NULL, pub_jwk));
+
+    json_auto_t *enc = jose_jwk_kem_enc(NULL, pub_jwk);
+    assert(enc);
+
+    unsigned char bad_priv[32];
+    memset(bad_priv, 0x42, sizeof(bad_priv));
+    json_auto_t *bad_jwk = json_pack("{s:s,s:s,s:O,s:o}",
+                                     "kty", "AKP",
+                                     "alg", a->name,
+                                     "pub", json_object_get(jwk, "pub"),
+                                     "priv", jose_b64_enc(bad_priv, sizeof(bad_priv)));
+    assert(bad_jwk);
+
+    json_auto_t *dec = jose_jwk_kem_dec(NULL, bad_jwk, json_object_get(enc, "ct"));
+    assert(!dec);
+}
+
+static void
+test_invalid_pub_key(void)
+{
+    /* Use a wrong-length buffer: ML-KEM-768 expects 1184 bytes */
+    unsigned char bad_pub[100];
+    memset(bad_pub, 0x42, sizeof(bad_pub));
+
+    json_auto_t *pub_b64 = jose_b64_enc(bad_pub, sizeof(bad_pub));
+    assert(pub_b64);
+
+    json_auto_t *jwk = json_pack("{s:s,s:s,s:O}",
+                                 "kty", "AKP",
+                                 "alg", "ML-KEM-768",
+                                 "pub", pub_b64);
+    assert(jwk);
+
+    json_auto_t *result = jose_jwk_kem_enc(NULL, jwk);
+    assert(!result);
+}
+
 int
 main(int argc, char *argv[])
 {
@@ -208,12 +294,24 @@ main(int argc, char *argv[])
 
         test_thumbprint(a);
         fprintf(stderr, "  thumbprint: OK\n");
+
+        test_seed_format(a);
+        fprintf(stderr, "  seed format (64 bytes): OK\n");
+
+        test_seed_determinism(a);
+        fprintf(stderr, "  seed determinism: OK\n");
+
+        test_wrong_priv_len(a);
+        fprintf(stderr, "  wrong priv length rejected: OK\n");
     }
 
     if (!found) {
         fprintf(stderr, "No KEM algorithms available (OpenSSL < 3.5?)\n");
         return 77;
     }
+
+    test_invalid_pub_key();
+    fprintf(stderr, "  invalid pub key rejected: OK\n");
 
     return EXIT_SUCCESS;
 }
